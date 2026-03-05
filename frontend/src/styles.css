@@ -233,6 +233,31 @@ button.ghost.compact {
   margin-top: 8px;
 }
 
+.scan-review {
+  margin-top: 12px;
+}
+
+.scan-review-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.scan-review-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.scan-review-score {
+  margin: 10px 0 6px;
+}
+
+.scan-review-score strong {
+  font-size: 24px;
+  color: #1d2430;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(180px, 1fr));

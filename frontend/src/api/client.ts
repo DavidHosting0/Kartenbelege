@@ -16,6 +16,26 @@ const jsonRequest = async <T>(url: string, init?: RequestInit): Promise<T> => {
   return (await response.json()) as T;
 };
 
+export type UploadReceiptResponse = {
+  id: string;
+  articleText: string | null;
+  merchantName: string | null;
+  cardType: string | null;
+  panMasked: string | null;
+  cardExpiry: string | null;
+  cardEntry: string | null;
+  transactionDate: string | null;
+  transactionTime: string | null;
+  amount: number | null;
+  currency: string | null;
+  cardLast4: string | null;
+  authCode: string | null;
+  terminalId: string | null;
+  merchantId: string | null;
+  transactionNo: string | null;
+  aid: string | null;
+};
+
 export const api = {
   get: <T>(url: string) => jsonRequest<T>(url),
   post: <T>(url: string, body?: unknown) =>
@@ -23,7 +43,7 @@ export const api = {
   delete: <T>(url: string) => jsonRequest<T>(url, { method: "DELETE" })
 };
 
-export const uploadReceiptImage = async (file: Blob): Promise<{ id: string }> => {
+export const uploadReceiptImage = async (file: Blob): Promise<UploadReceiptResponse> => {
   const formData = new FormData();
   formData.append("receiptImage", file, "receipt.jpg");
 
@@ -38,5 +58,5 @@ export const uploadReceiptImage = async (file: Blob): Promise<{ id: string }> =>
     throw new Error(data?.error ?? "Upload failed");
   }
 
-  return (await response.json()) as { id: string };
+  return (await response.json()) as UploadReceiptResponse;
 };
