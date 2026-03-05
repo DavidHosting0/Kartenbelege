@@ -34,6 +34,13 @@ export type UploadReceiptResponse = {
   merchantId: string | null;
   transactionNo: string | null;
   aid: string | null;
+  duplicateCheck?: {
+    isLikelyDuplicate: boolean;
+    level: "none" | "possible" | "likely";
+    confidence: number;
+    matchedReceiptId: string | null;
+    reasons: string[];
+  };
 };
 
 export const api = {

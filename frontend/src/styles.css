@@ -306,6 +306,33 @@ button.ghost.compact {
   background: transparent;
 }
 
+.duplicate-alert {
+  margin: 8px 0 4px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid #ffe0b2;
+  background: #fff7ed;
+}
+
+.duplicate-alert p {
+  margin: 0;
+  font-size: 13px;
+  color: #8a3a05;
+}
+
+.duplicate-alert p + p {
+  margin-top: 6px;
+}
+
+.duplicate-alert.likely {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.duplicate-alert.likely p {
+  color: #991b1b;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(180px, 1fr));

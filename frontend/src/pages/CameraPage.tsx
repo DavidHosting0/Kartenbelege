@@ -27,6 +27,13 @@ export const CameraPage = () => {
     foundCount: number;
     totalCount: number;
     missingFields: string[];
+    duplicate: {
+      isLikelyDuplicate: boolean;
+      level: "none" | "possible" | "likely";
+      confidence: number;
+      matchedReceiptId: string | null;
+      reasons: string[];
+    } | null;
   } | null>(null);
 
   useEffect(() => {
@@ -76,7 +83,8 @@ export const CameraPage = () => {
       level,
       foundCount,
       totalCount: checks.length,
-      missingFields
+      missingFields,
+      duplicate: result.duplicateCheck ?? null
     };
   };
 
@@ -214,6 +222,24 @@ export const CameraPage = () => {
             <p className="scan-review-score">
               <strong>{review.score}%</strong> data quality score
             </p>
+            {review.duplicate && review.duplicate.confidence > 40 && (
+              <div className={`duplicate-alert ${review.duplicate.isLikelyDuplicate ? "likely" : "possible"}`}>
+                <p>
+                  {review.duplicate.isLikelyDuplicate
+                    ? "This receipt was likely already photographed."
+                    : "This receipt may already exist."}{" "}
+                  ({review.duplicate.confidence}% match)
+                </p>
+                {review.duplicate.reasons.length > 0 && (
+                  <p className="muted">Signals: {review.duplicate.reasons.join(", ")}</p>
+                )}
+                {review.duplicate.matchedReceiptId && (
+                  <p>
+                    <Link to={`/receipts/${review.duplicate.matchedReceiptId}`}>Open similar receipt</Link>
+                  </p>
+                )}
+              </div>
+            )}
             <p className="muted">
               Detected {review.foundCount} of {review.totalCount} key fields.
             </p>

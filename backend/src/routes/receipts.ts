@@ -32,6 +32,172 @@ const scopedWhere = (user: { id: string; role: "admin" | "user" }, extra: string
   };
 };
 
+type DuplicateCandidate = {
+  id: string;
+  amount: number | null;
+  transaction_date: string | null;
+  card_last4: string | null;
+  terminal_id: string | null;
+  merchant_id: string | null;
+  auth_code: string | null;
+  transaction_no: string | null;
+  pan_masked: string | null;
+};
+
+const normToken = (value: string | null | undefined): string =>
+  (value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+const normDigits = (value: string | null | undefined): string =>
+  (value ?? "").replace(/\D/g, "");
+
+const amountsClose = (a: number | null | undefined, b: number | null | undefined): boolean =>
+  a !== null && a !== undefined && b !== null && b !== undefined && Math.abs(a - b) <= 0.01;
+
+const buildDuplicateFeedback = (
+  parsed: {
+    amount: number | null;
+    transactionDate: string | null;
+    cardLast4: string | null;
+    terminalId: string | null;
+    merchantId: string | null;
+    authCode: string | null;
+    transactionNo: string | null;
+    panMasked: string | null;
+  },
+  candidates: DuplicateCandidate[]
+) => {
+  let best:
+    | {
+      id: string;
+      score: number;
+      reasons: string[];
+    }
+    | null = null;
+
+  for (const candidate of candidates) {
+    let score = 0;
+    const reasons: string[] = [];
+
+    const txNoMatch =
+      parsed.transactionNo &&
+      candidate.transaction_no &&
+      normDigits(parsed.transactionNo) !== "" &&
+      normDigits(parsed.transactionNo) === normDigits(candidate.transaction_no);
+    if (txNoMatch) {
+      score += 60;
+      reasons.push("same transaction number");
+    }
+
+    const authMatch =
+      parsed.authCode &&
+      candidate.auth_code &&
+      normDigits(parsed.authCode) !== "" &&
+      normDigits(parsed.authCode) === normDigits(candidate.auth_code);
+    if (authMatch) {
+      score += 30;
+      reasons.push("same auth code");
+    }
+
+    const terminalMatch =
+      parsed.terminalId &&
+      candidate.terminal_id &&
+      normDigits(parsed.terminalId) !== "" &&
+      normDigits(parsed.terminalId) === normDigits(candidate.terminal_id);
+    if (terminalMatch) {
+      score += 20;
+      reasons.push("same terminal ID");
+    }
+
+    const merchantMatch =
+      parsed.merchantId &&
+      candidate.merchant_id &&
+      normDigits(parsed.merchantId) !== "" &&
+      normDigits(parsed.merchantId) === normDigits(candidate.merchant_id);
+    if (merchantMatch) {
+      score += 20;
+      reasons.push("same merchant ID");
+    }
+
+    const last4Match =
+      parsed.cardLast4 &&
+      candidate.card_last4 &&
+      normDigits(parsed.cardLast4).length === 4 &&
+      normDigits(parsed.cardLast4) === normDigits(candidate.card_last4);
+    if (last4Match) {
+      score += 15;
+      reasons.push("same card last 4");
+    }
+
+    const dateMatch =
+      parsed.transactionDate &&
+      candidate.transaction_date &&
+      parsed.transactionDate === candidate.transaction_date;
+    if (dateMatch) {
+      score += 10;
+      reasons.push("same transaction date");
+    }
+
+    if (amountsClose(parsed.amount, candidate.amount)) {
+      score += 5;
+      reasons.push("same amount");
+    }
+
+    const panMatch =
+      parsed.panMasked &&
+      candidate.pan_masked &&
+      normToken(parsed.panMasked).length >= 10 &&
+      normToken(parsed.panMasked) === normToken(candidate.pan_masked);
+    if (panMatch) {
+      score += 20;
+      reasons.push("same masked card number");
+    }
+
+    if (txNoMatch && terminalMatch && dateMatch) {
+      score += 25;
+      reasons.push("same terminal + transaction combination");
+    }
+    if (authMatch && terminalMatch && amountsClose(parsed.amount, candidate.amount)) {
+      score += 20;
+      reasons.push("same auth + terminal + amount");
+    }
+
+    score = Math.min(score, 100);
+    if (!best || score > best.score) {
+      best = { id: candidate.id, score, reasons };
+    }
+  }
+
+  if (!best || best.score < 50) {
+    const fallbackScore = best ? best.score : 0;
+    const fallbackReasons = best ? best.reasons.slice(0, 3) : [];
+    return {
+      isLikelyDuplicate: false,
+      level: "none" as const,
+      confidence: fallbackScore,
+      matchedReceiptId: null,
+      reasons: fallbackReasons
+    };
+  }
+
+  if (best.score >= 70) {
+    return {
+      isLikelyDuplicate: true,
+      level: "likely" as const,
+      confidence: best.score,
+      matchedReceiptId: best.id,
+      reasons: best.reasons.slice(0, 4)
+    };
+  }
+
+  return {
+    isLikelyDuplicate: false,
+    level: "possible" as const,
+    confidence: best.score,
+    matchedReceiptId: best.id,
+    reasons: best.reasons.slice(0, 4)
+  };
+};
+
 receiptRouter.post("/", upload.single("receiptImage"), async (req, res) => {
   try {
     if (!req.file) {
@@ -53,6 +219,18 @@ receiptRouter.post("/", upload.single("receiptImage"), async (req, res) => {
     }
 
     const parsed = parseReceiptText(rawText);
+    const duplicateScope = scopedWhere(req.user!, ["created_at >= datetime('now', '-180 days')"]);
+    const duplicateCandidates = db
+      .prepare(
+        `SELECT id, amount, transaction_date, card_last4, terminal_id, merchant_id, auth_code, transaction_no, pan_masked
+         FROM receipts
+         ${duplicateScope.sql}
+         ORDER BY created_at DESC
+         LIMIT 800`
+      )
+      .all(...duplicateScope.values) as DuplicateCandidate[];
+
+    const duplicateCheck = buildDuplicateFeedback(parsed, duplicateCandidates);
     const compressedImage = await compressForStorage(req.file.buffer);
 
     const userDir = path.resolve("uploads", "receipts", userId);
@@ -91,7 +269,8 @@ receiptRouter.post("/", upload.single("receiptImage"), async (req, res) => {
 
     return res.status(201).json({
       id: receiptId,
-      ...parsed
+      ...parsed,
+      duplicateCheck
     });
   } catch (error) {
     console.error(error);
