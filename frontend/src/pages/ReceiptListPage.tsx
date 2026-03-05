@@ -171,60 +171,62 @@ export const ReceiptListPage = () => {
             <p>Latest scanned receipts with parsed payment metadata</p>
           </div>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th><span className="col-title">Preview</span></th>
-              <th><span className="col-title">Receipt Note</span></th>
-              <th><span className="col-title">Date & Time</span></th>
-              <th><span className="col-title">Amount</span></th>
-              <th><span className="col-title">Card Type</span></th>
-              <th><span className="col-title">Last 4</span></th>
-              <th><span className="col-title">Status</span></th>
-              <th><span className="col-title">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleReceipts.map((receipt) => {
-              const status = getReceiptStatus(receipt);
-              return (
-                <tr key={receipt.id} onClick={() => setSelectedId(receipt.id)}>
-                  <td>
-                    <img alt="Receipt preview" className="thumb" src={receipt.imageUrl} />
-                  </td>
-                  <td>
-                    <span className={`receipt-note-pill ${receipt.article_text && receipt.article_text.trim() ? "" : "empty"}`}>
-                      {receipt.article_text && receipt.article_text.trim() ? receipt.article_text : "n/a"}
-                    </span>
-                  </td>
-                  <td>{receipt.transaction_date ?? "n/a"} {receipt.transaction_time ?? ""}</td>
-                  <td>{receipt.amount !== null ? `${receipt.amount.toFixed(2)} ${receipt.currency ?? ""}` : "n/a"}</td>
-                  <td>{receipt.card_type ?? "n/a"}</td>
-                  <td>{receipt.card_last4 ?? "n/a"}</td>
-                  <td>
-                    <span className={`status-pill ${status === "Verified" ? "ok" : "warn"}`}>{status}</span>
-                  </td>
-                  <td>
-                    <div className="row-actions" onClick={(event) => event.stopPropagation()}>
-                      <button
-                        className="ghost compact"
-                        onClick={() => navigate(`/receipts/${receipt.id}`)}
-                        type="button"
-                      >
-                        Open
-                      </button>
-                      {user?.role === "admin" && (
-                        <button className="danger compact" onClick={() => onDeleteReceipt(receipt.id)} type="button">
-                          Delete
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th><span className="col-title">Preview</span></th>
+                <th><span className="col-title">Receipt Note</span></th>
+                <th><span className="col-title">Date & Time</span></th>
+                <th><span className="col-title">Amount</span></th>
+                <th><span className="col-title">Card Type</span></th>
+                <th><span className="col-title">Last 4</span></th>
+                <th><span className="col-title">Status</span></th>
+                <th><span className="col-title">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleReceipts.map((receipt) => {
+                const status = getReceiptStatus(receipt);
+                return (
+                  <tr key={receipt.id} onClick={() => setSelectedId(receipt.id)}>
+                    <td>
+                      <img alt="Receipt preview" className="thumb" src={receipt.imageUrl} />
+                    </td>
+                    <td>
+                      <span className={`receipt-note-pill ${receipt.article_text && receipt.article_text.trim() ? "" : "empty"}`}>
+                        {receipt.article_text && receipt.article_text.trim() ? receipt.article_text : "n/a"}
+                      </span>
+                    </td>
+                    <td>{receipt.transaction_date ?? "n/a"} {receipt.transaction_time ?? ""}</td>
+                    <td>{receipt.amount !== null ? `${receipt.amount.toFixed(2)} ${receipt.currency ?? ""}` : "n/a"}</td>
+                    <td>{receipt.card_type ?? "n/a"}</td>
+                    <td>{receipt.card_last4 ?? "n/a"}</td>
+                    <td>
+                      <span className={`status-pill ${status === "Verified" ? "ok" : "warn"}`}>{status}</span>
+                    </td>
+                    <td>
+                      <div className="row-actions" onClick={(event) => event.stopPropagation()}>
+                        <button
+                          className="ghost compact"
+                          onClick={() => navigate(`/receipts/${receipt.id}`)}
+                          type="button"
+                        >
+                          Open
                         </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                        {user?.role === "admin" && (
+                          <button className="danger compact" onClick={() => onDeleteReceipt(receipt.id)} type="button">
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {!loading && visibleReceipts.length === 0 && <div className="empty-state">No receipts found.</div>}
       </section>
 

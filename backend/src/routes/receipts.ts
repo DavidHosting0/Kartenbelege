@@ -401,6 +401,40 @@ receiptRouter.get("/:id/image", (req, res) => {
   return res.sendFile(path.resolve(row.image_path));
 });
 
+receiptRouter.delete("/:id/recent-delete", (req, res) => {
+  const row = db
+    .prepare("SELECT id, user_id, image_path, created_at FROM receipts WHERE id = ?")
+    .get(req.params.id) as
+    | { id: string; user_id: string; image_path: string; created_at: string }
+    | undefined;
+
+  if (!row) {
+    return res.status(404).json({ error: "Receipt not found" });
+  }
+
+  const isAdmin = req.user!.role === "admin";
+  const isOwner = row.user_id === req.user!.id;
+  if (!isAdmin && !isOwner) {
+    return res.status(403).json({ error: "Not allowed to delete this receipt" });
+  }
+
+  // Keep this endpoint scoped to freshly-uploaded receipts for non-admin users.
+  if (!isAdmin) {
+    const createdAt = new Date(row.created_at.replace(" ", "T") + "Z").getTime();
+    const maxAgeMs = 15 * 60 * 1000;
+    if (!Number.isFinite(createdAt) || Date.now() - createdAt > maxAgeMs) {
+      return res.status(403).json({ error: "Quick delete expired for this receipt" });
+    }
+  }
+
+  db.prepare("DELETE FROM receipts WHERE id = ?").run(req.params.id);
+  if (fs.existsSync(row.image_path)) {
+    fs.unlinkSync(row.image_path);
+  }
+
+  return res.json({ ok: true });
+});
+
 receiptRouter.delete("/:id", requireAdmin, (req, res) => {
   const row = db.prepare("SELECT id, image_path FROM receipts WHERE id = ?").get(req.params.id) as
     | { id: string; image_path: string }

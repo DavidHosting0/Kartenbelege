@@ -21,6 +21,7 @@ export const CameraPage = () => {
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState<{
     receiptId: string;
+    previewUrl: string;
     score: number;
     level: "Excellent" | "Good" | "Fair" | "Needs Review";
     foundCount: number;
@@ -28,10 +29,18 @@ export const CameraPage = () => {
     missingFields: string[];
   } | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (review?.previewUrl) {
+        URL.revokeObjectURL(review.previewUrl);
+      }
+    };
+  }, [review]);
+
   const hasValue = (value: string | number | null | undefined) =>
     value !== null && value !== undefined && String(value).trim().length > 0;
 
-  const buildReview = (result: UploadReceiptResponse) => {
+  const buildReview = (result: UploadReceiptResponse, previewUrl: string) => {
     const checks = [
       { label: "Date", ok: hasValue(result.transactionDate), weight: 1 },
       { label: "Time", ok: hasValue(result.transactionTime), weight: 0.5 },
@@ -62,6 +71,7 @@ export const CameraPage = () => {
 
     return {
       receiptId: result.id,
+      previewUrl,
       score,
       level,
       foundCount,
@@ -92,19 +102,56 @@ export const CameraPage = () => {
   }, []);
 
   const sendForOcr = async (blob: Blob) => {
+    const previewUrl = URL.createObjectURL(blob);
     setBusy(true);
     setStatus("Uploading and processing OCR...");
     setError(null);
-    setReview(null);
+    setReview((current) => {
+      if (current?.previewUrl) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+      return null;
+    });
     try {
       const result = await uploadReceiptImage(blob);
-      setReview(buildReview(result));
+      setReview(buildReview(result, previewUrl));
       setStatus("Receipt processed and saved.");
     } catch (err) {
+      URL.revokeObjectURL(previewUrl);
       setError(err instanceof Error ? err.message : "Upload failed");
       setStatus("Capture failed");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const closeReview = () => {
+    setReview((current) => {
+      if (current?.previewUrl) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+      return null;
+    });
+  };
+
+  const deleteUploadedReceipt = async () => {
+    if (!review) return;
+    const confirmed = window.confirm("Delete this receipt?");
+    if (!confirmed) return;
+    try {
+      await fetch(`/api/receipts/${review.receiptId}/recent-delete`, {
+        method: "DELETE",
+        credentials: "include"
+      }).then(async (response) => {
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error ?? "Failed to delete receipt");
+        }
+      });
+      setStatus("Receipt deleted.");
+      closeReview();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete receipt");
     }
   };
 
@@ -155,26 +202,37 @@ export const CameraPage = () => {
       <p>{status}</p>
       {error && <p className="error">{error}</p>}
       {review && (
-        <section className="card scan-review">
-          <div className="scan-review-head">
-            <h2>Data Quality Check</h2>
-            <span className={`status-pill ${review.level === "Excellent" || review.level === "Good" ? "ok" : "warn"}`}>
-              {review.level}
-            </span>
-          </div>
-          <p className="scan-review-score">
-            <strong>{review.score}%</strong> confidence based on parsed field completeness.
-          </p>
-          <p className="muted">
-            Detected {review.foundCount} of {review.totalCount} key fields.
-          </p>
-          {review.missingFields.length > 0 && (
-            <p className="muted">Missing: {review.missingFields.slice(0, 5).join(", ")}{review.missingFields.length > 5 ? "..." : ""}</p>
-          )}
-          <p>
-            <Link to={`/receipts/${review.receiptId}`}>Open receipt details</Link>
-          </p>
-        </section>
+        <div className="review-modal-overlay" onClick={closeReview} role="presentation">
+          <section className="card review-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="scan-review-head">
+              <h2>Scan Review</h2>
+              <span className={`status-pill ${review.level === "Excellent" || review.level === "Good" ? "ok" : "warn"}`}>
+                {review.level}
+              </span>
+            </div>
+            <img alt="Captured receipt preview" className="review-preview-image" src={review.previewUrl} />
+            <p className="scan-review-score">
+              <strong>{review.score}%</strong> data quality score
+            </p>
+            <p className="muted">
+              Detected {review.foundCount} of {review.totalCount} key fields.
+            </p>
+            {review.missingFields.length > 0 && (
+              <p className="muted">Missing: {review.missingFields.slice(0, 5).join(", ")}{review.missingFields.length > 5 ? "..." : ""}</p>
+            )}
+            <div className="review-modal-actions">
+              <Link className="ghost compact" to={`/receipts/${review.receiptId}`}>
+                Open receipt
+              </Link>
+              <button className="danger compact" onClick={deleteUploadedReceipt} type="button">
+                Delete receipt
+              </button>
+              <button className="compact" onClick={closeReview} type="button">
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
       )}
     </main>
   );
