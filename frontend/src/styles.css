@@ -442,6 +442,38 @@ button.ghost.compact {
   overflow: hidden;
 }
 
+.review-queue-card {
+  margin-top: 12px;
+}
+
+.review-queue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.review-queue-row {
+  border: 1px solid #e6eaf0;
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.review-queue-main strong {
+  display: block;
+  font-size: 14px;
+  color: #1f2732;
+}
+
+.review-queue-amount {
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  white-space: nowrap;
+}
+
 .table-scroll {
   width: 100%;
   overflow-x: auto;
@@ -534,12 +566,25 @@ button.ghost.compact {
   border: 1px solid #2d3239;
 }
 
+.detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .receipt-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(240px, 1fr));
   gap: 14px 20px;
   padding-bottom: 16px;
   border-bottom: 1px solid #edf1f5;
+}
+
+.detail-inline-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .receipt-field label {
@@ -893,6 +938,15 @@ pre {
 
   .receipt-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .review-queue-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .review-queue-amount {
+    white-space: normal;
   }
 }
 

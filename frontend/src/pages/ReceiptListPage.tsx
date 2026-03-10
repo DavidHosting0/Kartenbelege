@@ -103,6 +103,10 @@ export const ReceiptListPage = () => {
     }
   };
 
+  const onEditReceipt = (receiptId: string) => {
+    navigate(`/receipts/${receiptId}?edit=1`);
+  };
+
   const onDownloadExcel = async () => {
     setError(null);
     try {
@@ -126,6 +130,11 @@ export const ReceiptListPage = () => {
       setError(err instanceof Error ? err.message : "Failed to download Excel export");
     }
   };
+
+  const needsReviewReceipts = useMemo(
+    () => receipts.filter((receipt) => getReceiptStatus(receipt) === "Needs Review"),
+    [receipts]
+  );
 
   return (
     <main className="page">
@@ -164,6 +173,42 @@ export const ReceiptListPage = () => {
         </button>
       </section>
       {error && <p className="error">{error}</p>}
+      <section className="card review-queue-card">
+        <div className="table-section-header">
+          <div>
+            <h2>Needs Review Queue</h2>
+            <p>Receipts missing key fields that should be reviewed and edited.</p>
+          </div>
+          <span className="meta-pill">{needsReviewReceipts.length} pending</span>
+        </div>
+        {needsReviewReceipts.length === 0 ? (
+          <div className="empty-state">All receipts look complete right now.</div>
+        ) : (
+          <div className="review-queue-list">
+            {needsReviewReceipts.map((receipt) => (
+              <div className="review-queue-row" key={receipt.id}>
+                <div className="review-queue-main">
+                  <strong>{receipt.article_text?.trim() || "n/a"}</strong>
+                  <span className="muted">
+                    {receipt.transaction_date ?? "n/a"} {receipt.transaction_time ?? ""}
+                  </span>
+                </div>
+                <span className="review-queue-amount">
+                  {receipt.amount !== null ? `${receipt.amount.toFixed(2)} ${receipt.currency ?? ""}` : "n/a"}
+                </span>
+                <div className="row-actions">
+                  <button className="ghost compact" onClick={() => navigate(`/receipts/${receipt.id}`)} type="button">
+                    Open
+                  </button>
+                  <button className="compact" onClick={() => onEditReceipt(receipt.id)} type="button">
+                    Edit
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
       <section className="card table-card">
         <div className="table-section-header">
           <div>
@@ -213,6 +258,9 @@ export const ReceiptListPage = () => {
                           type="button"
                         >
                           Open
+                        </button>
+                        <button className="compact" onClick={() => onEditReceipt(receipt.id)} type="button">
+                          Edit
                         </button>
                         {user?.role === "admin" && (
                           <button className="danger compact" onClick={() => onDeleteReceipt(receipt.id)} type="button">

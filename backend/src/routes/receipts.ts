@@ -546,6 +546,81 @@ receiptRouter.get("/export.xlsx", async (req, res) => {
   res.end();
 });
 
+receiptRouter.patch("/:id", (req, res) => {
+  const existing = db
+    .prepare("SELECT id, user_id FROM receipts WHERE id = ?")
+    .get(req.params.id) as { id: string; user_id: string } | undefined;
+
+  if (!existing || (req.user!.role !== "admin" && existing.user_id !== req.user!.id)) {
+    return res.status(404).json({ error: "Receipt not found" });
+  }
+
+  const payload = (req.body ?? {}) as Record<string, unknown>;
+  const fieldMap: Record<string, string> = {
+    article_text: "article_text",
+    card_type: "card_type",
+    pan_masked: "pan_masked",
+    card_expiry: "card_expiry",
+    card_entry: "card_entry",
+    amount: "amount",
+    currency: "currency",
+    transaction_date: "transaction_date",
+    transaction_time: "transaction_time",
+    card_last4: "card_last4",
+    auth_code: "auth_code",
+    terminal_id: "terminal_id",
+    merchant_id: "merchant_id",
+    transaction_no: "transaction_no",
+    aid: "aid"
+  };
+
+  const updates: Array<{ column: string; value: string | number | null }> = [];
+  for (const [key, column] of Object.entries(fieldMap)) {
+    if (!(key in payload)) continue;
+    const raw = payload[key];
+    if (key === "amount") {
+      if (raw === null || raw === "") {
+        updates.push({ column, value: null });
+        continue;
+      }
+      const amount = typeof raw === "number" ? raw : Number(raw);
+      if (!Number.isFinite(amount)) {
+        return res.status(400).json({ error: "Amount must be a valid number" });
+      }
+      updates.push({ column, value: amount });
+      continue;
+    }
+
+    if (raw === null || raw === "") {
+      updates.push({ column, value: null });
+      continue;
+    }
+
+    updates.push({ column, value: String(raw).trim() });
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: "No editable fields provided" });
+  }
+
+  const setSql = updates.map((update) => `${update.column} = ?`).join(", ");
+  const values = updates.map((update) => update.value);
+  db.prepare(`UPDATE receipts SET ${setSql} WHERE id = ?`).run(...values, req.params.id);
+
+  const row = db
+    .prepare(
+      `SELECT id, user_id, article_text, merchant_name, card_type, pan_masked, card_expiry, card_entry, amount, currency, transaction_date, transaction_time,
+              card_last4, auth_code, terminal_id, merchant_id, transaction_no, aid, raw_ocr_text, created_at
+       FROM receipts WHERE id = ?`
+    )
+    .get(req.params.id) as any;
+
+  return res.json({
+    ...row,
+    imageUrl: `/api/receipts/${row.id}/image`
+  });
+});
+
 receiptRouter.get("/:id", (req, res) => {
   const row = db
     .prepare(
