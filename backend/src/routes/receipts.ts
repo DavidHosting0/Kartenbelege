@@ -535,6 +535,155 @@ receiptRouter.get("/export.xlsx", async (req, res) => {
     monthGroups.set("No Receipts", []);
   }
 
+  // Dashboard worksheet with high-level statistics and summaries.
+  const dashboard = workbook.addWorksheet("Dashboard", {
+    views: [{ state: "frozen", ySplit: 4 }]
+  });
+  dashboard.columns = [
+    { width: 16 },
+    { width: 16 },
+    { width: 16 },
+    { width: 2 },
+    { width: 20 },
+    { width: 14 },
+    { width: 16 },
+    { width: 2 },
+    { width: 22 },
+    { width: 12 },
+    { width: 14 },
+    { width: 16 }
+  ];
+
+  const totalReceipts = rows.length;
+  const totalAmount = rows.reduce((sum, row) => sum + (row.amount ?? 0), 0);
+  const verifiedCount = rows.filter(
+    (row) => row.amount !== null && !!row.card_type && !!row.card_last4 && !!row.transaction_date
+  ).length;
+  const needsReviewCount = Math.max(0, totalReceipts - verifiedCount);
+  const averageAmount = totalReceipts > 0 ? totalAmount / totalReceipts : 0;
+
+  dashboard.mergeCells("A1:L2");
+  dashboard.getCell("A1").value = "Receipt Dashboard";
+  dashboard.getCell("A1").font = { size: 24, bold: true, color: { argb: "FF1F2937" } };
+  dashboard.getCell("A1").alignment = { vertical: "middle", horizontal: "center" };
+  dashboard.getCell("A1").fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFF3F4F6" }
+  };
+  dashboard.getCell("A1").border = {
+    top: { style: "thin", color: { argb: "FFE5E7EB" } },
+    left: { style: "thin", color: { argb: "FFE5E7EB" } },
+    bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+    right: { style: "thin", color: { argb: "FFE5E7EB" } }
+  };
+
+  dashboard.mergeCells("A3:L3");
+  dashboard.getCell("A3").value = `Generated at ${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`;
+  dashboard.getCell("A3").font = { size: 11, color: { argb: "FF6B7280" } };
+  dashboard.getCell("A3").alignment = { vertical: "middle", horizontal: "center" };
+
+  const kpiCard = (
+    range: string,
+    labelCell: string,
+    valueCell: string,
+    label: string,
+    value: string,
+    fill: string
+  ) => {
+    dashboard.mergeCells(range);
+    const [start] = range.split(":");
+    dashboard.getCell(start).fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+    dashboard.getCell(start).border = {
+      top: { style: "thin", color: { argb: "FFD1D5DB" } },
+      left: { style: "thin", color: { argb: "FFD1D5DB" } },
+      bottom: { style: "thin", color: { argb: "FFD1D5DB" } },
+      right: { style: "thin", color: { argb: "FFD1D5DB" } }
+    };
+    dashboard.getCell(labelCell).value = label;
+    dashboard.getCell(labelCell).font = { size: 11, bold: true, color: { argb: "FF4B5563" } };
+    dashboard.getCell(valueCell).value = value;
+    dashboard.getCell(valueCell).font = { size: 18, bold: true, color: { argb: "FF111827" } };
+  };
+
+  kpiCard("A5:C7", "A5", "A6", "Total receipts", `${totalReceipts}`, "FFF8FAFC");
+  kpiCard("E5:G7", "E5", "E6", "Total amount", `${totalAmount.toFixed(2)} CHF`, "FFEEF6FF");
+  kpiCard("I5:L7", "I5", "I6", "Average amount", `${averageAmount.toFixed(2)} CHF`, "FFF5F3FF");
+  kpiCard("A8:C10", "A8", "A9", "Verified", `${verifiedCount}`, "FFECFDF3");
+  kpiCard("E8:G10", "E8", "E9", "Needs review", `${needsReviewCount}`, "FFFFF7ED");
+  kpiCard("I8:L10", "I8", "I9", "Coverage", totalReceipts ? `${Math.round((verifiedCount / totalReceipts) * 100)}%` : "0%", "FFFFFBEB");
+
+  dashboard.mergeCells("A12:G12");
+  dashboard.getCell("A12").value = "Monthly receipt volume";
+  dashboard.getCell("A12").font = { size: 14, bold: true, color: { argb: "FF1F2937" } };
+  dashboard.getCell("A12").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
+
+  dashboard.getCell("A13").value = "Month";
+  dashboard.getCell("C13").value = "Receipts";
+  dashboard.getCell("E13").value = "Amount";
+  ["A13", "C13", "E13"].forEach((cell) => {
+    dashboard.getCell(cell).font = { bold: true, size: 11, color: { argb: "FF374151" } };
+  });
+
+  let monthlyRow = 14;
+  monthKeys.forEach((monthKey) => {
+    const monthRows = monthGroups.get(monthKey) ?? [];
+    const monthAmount = monthRows.reduce((sum, row) => sum + (row.amount ?? 0), 0);
+    dashboard.getCell(`A${monthlyRow}`).value = monthKey;
+    dashboard.getCell(`C${monthlyRow}`).value = monthRows.length;
+    dashboard.getCell(`E${monthlyRow}`).value = monthAmount;
+    dashboard.getCell(`E${monthlyRow}`).numFmt = "#,##0.00";
+    monthlyRow += 1;
+  });
+
+  const cardTypeMap = new Map<string, { count: number; amount: number }>();
+  rows.forEach((row) => {
+    if (!row.card_type) return;
+    const key = row.card_type.trim();
+    if (!key) return;
+    const existing = cardTypeMap.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.amount += row.amount ?? 0;
+    } else {
+      cardTypeMap.set(key, { count: 1, amount: row.amount ?? 0 });
+    }
+  });
+  const topCardTypes = [...cardTypeMap.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 8);
+
+  dashboard.mergeCells("I12:L12");
+  dashboard.getCell("I12").value = "Top card types";
+  dashboard.getCell("I12").font = { size: 14, bold: true, color: { argb: "FF1F2937" } };
+  dashboard.getCell("I12").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
+
+  dashboard.getCell("I13").value = "Card type";
+  dashboard.getCell("K13").value = "Count";
+  dashboard.getCell("L13").value = "Amount";
+  ["I13", "K13", "L13"].forEach((cell) => {
+    dashboard.getCell(cell).font = { bold: true, size: 11, color: { argb: "FF374151" } };
+  });
+
+  let cardRow = 14;
+  topCardTypes.forEach(([cardType, stats]) => {
+    dashboard.getCell(`I${cardRow}`).value = cardType;
+    dashboard.getCell(`K${cardRow}`).value = stats.count;
+    dashboard.getCell(`L${cardRow}`).value = stats.amount;
+    dashboard.getCell(`L${cardRow}`).numFmt = "#,##0.00";
+    cardRow += 1;
+  });
+
+  [12, 13].forEach((rowIdx) => {
+    for (let col = 1; col <= 12; col += 1) {
+      const cell = dashboard.getRow(rowIdx).getCell(col);
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFE5E7EB" } },
+        bottom: { style: "thin", color: { argb: "FFE5E7EB" } }
+      };
+    }
+  });
+
   for (const monthKey of monthKeys) {
     const safeSheetName = monthKey.slice(0, 31);
     const sheet = workbook.addWorksheet(safeSheetName, {
