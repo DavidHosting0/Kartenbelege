@@ -417,17 +417,15 @@ receiptRouter.get("/analytics", (req, res) => {
 });
 
 receiptRouter.get("/export.xlsx", async (req, res) => {
-  const scope = scopedWhere(req.user!);
   const rows = db
     .prepare(
       `SELECT id, user_id, article_text, merchant_name, amount, currency, transaction_date, transaction_time,
               card_type, card_last4, pan_masked, card_expiry, card_entry, auth_code, terminal_id, merchant_id,
               transaction_no, aid, image_path, created_at
        FROM receipts
-       ${scope.sql}
        ORDER BY created_at DESC`
     )
-    .all(...scope.values) as Array<{
+    .all() as Array<{
     id: string;
     user_id: string;
     article_text: string | null;
