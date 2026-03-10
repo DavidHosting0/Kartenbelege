@@ -198,6 +198,54 @@ const buildDuplicateFeedback = (
   };
 };
 
+const monthKeyFromDateValue = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+  const ymd = trimmed.match(/^(\d{4})[-/.](\d{2})[-/.](\d{2})$/);
+  if (ymd) {
+    const [, year, month] = ymd;
+    const monthNum = Number(month);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${year}-${month.padStart(2, "0")}`;
+    }
+  }
+
+  // DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+  const dmy = trimmed.match(/^(\d{2})[-/.](\d{2})[-/.](\d{4})$/);
+  if (dmy) {
+    const [, , month, year] = dmy;
+    const monthNum = Number(month);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${year}-${month.padStart(2, "0")}`;
+    }
+  }
+
+  // DD-MM-YY or DD/MM/YY or DD.MM.YY
+  const dmyShort = trimmed.match(/^(\d{2})[-/.](\d{2})[-/.](\d{2})$/);
+  if (dmyShort) {
+    const [, , month, year] = dmyShort;
+    const monthNum = Number(month);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `20${year}-${month.padStart(2, "0")}`;
+    }
+  }
+
+  // Already month-like
+  const ym = trimmed.match(/^(\d{4})[-/.](\d{2})$/);
+  if (ym) {
+    const [, year, month] = ym;
+    const monthNum = Number(month);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${year}-${month.padStart(2, "0")}`;
+    }
+  }
+
+  return null;
+};
+
 receiptRouter.post("/", upload.single("receiptImage"), async (req, res) => {
   try {
     if (!req.file) {
@@ -472,10 +520,7 @@ receiptRouter.get("/export.xlsx", async (req, res) => {
 
   const monthGroups = new Map<string, typeof rows>();
   for (const row of rows) {
-    const monthKey =
-      (row.transaction_date && /^\d{4}-\d{2}/.test(row.transaction_date) ? row.transaction_date.slice(0, 7) : null) ??
-      (row.created_at && /^\d{4}-\d{2}/.test(row.created_at) ? row.created_at.slice(0, 7) : null) ??
-      "Unknown";
+    const monthKey = monthKeyFromDateValue(row.transaction_date) ?? monthKeyFromDateValue(row.created_at) ?? "Unknown";
     const group = monthGroups.get(monthKey);
     if (group) {
       group.push(row);
